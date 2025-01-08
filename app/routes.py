@@ -12,6 +12,8 @@ from app.utils.jwt_auth import create_access_token, get_current_user
 
 from fastapi.security import OAuth2PasswordRequestForm
 
+from app.utils.fernet_encryption import cifrar_contraseña, descifrar_contraseña
+
 router = APIRouter()
 
 
@@ -36,9 +38,11 @@ def login_usuario(
 
     # Comprueba si el usuario ya existe en la base de datos
     usuario_bd = db.get(Usuario, usuario.username)
+
     if usuario_bd:
+        contraseña_descifrada = descifrar_contraseña(usuario_bd.contraseña)
         # Comprueba que la contraseña no haya cambiado. Si ha cambiado, actualizo la base de datos.
-        if usuario_bd.contraseña != usuario.password:
+        if usuario.password != contraseña_descifrada:
             vivagym_auth = checkLogin(usuario) # Comprueba la conexión con vivaGym antes de actualizar la contraseña
             if not vivagym_auth:
                 raise HTTPException(
@@ -60,9 +64,10 @@ def login_usuario(
                 detail="No se ha conseguido autenticar el usuario."
             )
              
+        contraseña_cifrada = cifrar_contraseña(usuario.password)
         nuevo_usuario = Usuario(
             id_usuario=usuario.username,
-            contraseña=usuario.password
+            contraseña=contraseña_cifrada
         )
 
         try:

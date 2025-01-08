@@ -62,13 +62,8 @@ def checkLogin(usuario: CreateUsuario) -> bool:
         if driver:
             driver.quit()
 
-def makeReservation(usuario: Usuario, fecha_reserva, centro, clase, hora):
+def makeReservation(email, password, fecha_reserva, centro, clase, hora):
     driver = None
-    
-    # Obengo los datos del usuario
-    email = usuario.id_usuario
-    password = usuario.contraseña
-
 
     # Obtengo los datos de la reserva
     booking_center = centro
@@ -79,7 +74,7 @@ def makeReservation(usuario: Usuario, fecha_reserva, centro, clase, hora):
     horas, minutos = hora.split(":")
     booking_hour = f"{int(horas)}:{minutos}"
 
-    print(f"email: {email}, password: {password} - Centro: {booking_center}, Fecha: {booking_date}, Clase: {booking_class}, Hora: {booking_hour}")
+    #print(f"email: {email}, password: {password} - Centro: {booking_center}, Fecha: {booking_date}, Clase: {booking_class}, Hora: {booking_hour}")
 
 
     try:

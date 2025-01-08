@@ -5,6 +5,7 @@ from app.db_utils import *
 from app.database import get_db
 from app.gateway.vg_selenium import makeReservation
 import calendar
+from app.utils.fernet_encryption import descifrar_contraseña
 
 jobstores = {
     'default': SQLAlchemyJobStore(url='sqlite:///tasks.db')
@@ -37,7 +38,9 @@ def ejecutar_reserva(id_reserva, hora, centro, clase, fecha_reserva=None, progra
         print(f"Ejecutando reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora}")
         
         usuarioReserva = obtener_usuario_por_reserva(db, id_reserva)
-        if makeReservation(usuarioReserva, fecha_reserva.date(), centro, clase, hora):
+        email_usuario = usuarioReserva.id_usuario
+        contraseña_usuario = descifrar_contraseña(usuarioReserva.contraseña)
+        if makeReservation(email_usuario, contraseña_usuario, fecha_reserva.date(), centro, clase, hora):
             confirmar_reserva(db, id_reserva, fecha_reserva)
            
             
