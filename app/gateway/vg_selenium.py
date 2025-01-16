@@ -158,7 +158,7 @@ def makeReservation(email, password, fecha_reserva, centro, clase, hora):
         print("¡Reserva confirmada!")
         
         # Enviar correo de confirmacion
-        send_email(booking_center, booking_date, booking_class, booking_hour)
+        send_email(email, booking_center, booking_date, booking_class, booking_hour)
 
         return True
 

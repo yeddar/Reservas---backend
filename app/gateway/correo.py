@@ -15,7 +15,7 @@ SMTP_PORT = os.getenv('SMTP_PORT')
 SEND_TO_EMAIL = os.getenv('SEND_TO_EMAIL')
 
 # Funcion para notificar reserva por correo electronico
-def send_email(center, date, class_name, hour):
+def send_email(email, center, date, class_name, hour):
     subject = "Reserva Confirmada"
     body = f"""
     Se ha confirmado la reserva:
@@ -28,7 +28,7 @@ def send_email(center, date, class_name, hour):
 
     msg = MIMEMultipart()
     msg['From'] = EMAIL_ADDRESS
-    msg['To'] = "diego-995@hotmail.com"
+    msg['To'] = email
     msg['Subject'] = subject
 
     msg.attach(MIMEText(body, 'plain'))
