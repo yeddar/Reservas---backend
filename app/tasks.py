@@ -126,6 +126,7 @@ def programar_reserva(id_reserva, dia_semana, hora, centro, clase):
         hour = hora.split(":")[0],
         minute = hora.split(":")[1],
         args = [id_reserva, hora, centro, clase],
+        misfire_grace_time=300,  # Permite hasta 5 minutos de retraso
         id = id_job,
     )
   
