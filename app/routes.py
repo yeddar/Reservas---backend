@@ -8,7 +8,11 @@ from app.database import Reserva, Usuario, get_db
 from app.tasks import programar_reserva, eliminar_reserva_programada
 from app.db_utils import *
 from app.gateway.vg_selenium import checkLogin
-from app.utils.jwt_auth import create_access_token, get_current_user
+from app.utils.jwt_auth import create_token, verify_token, get_current_user, oauth2_scheme
+from typing import Optional
+from fastapi.responses import JSONResponse
+from fastapi import Cookie
+from fastapi import Form
 
 from fastapi.security import OAuth2PasswordRequestForm
 
@@ -17,15 +21,32 @@ from app.utils.fernet_encryption import cifrar_contraseña, descifrar_contraseñ
 router = APIRouter()
 
 
-# @router.get("/usuarios/")
-# def listar_usuarios(db: Session = Depends(get_db)):
-#     usuarios = db.query(Usuario).all()
-#     return usuarios
+@router.post("/refresh/")
+def refresh_token(refresh_token: str = Cookie(None)):
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="No se encontró el refresh token")
+
+    try:
+        payload = verify_token(refresh_token)
+        id_usuario = payload.get("sub")
+
+        if not id_usuario:
+            raise HTTPException(status_code=401, detail="Token inválido")
+
+        # Generar un nuevo access token
+        new_access_token = create_token({"sub": id_usuario}, 15)
+
+        return {"access_token": new_access_token, "token_type": "bearer"}
+    
+    except Exception:
+        raise HTTPException(status_code=401, detail="Refresh token inválido o expirado")
+
 
 @router.post("/login/")
 def login_usuario(
     #usuario: CreateUsuario,
     form_data: OAuth2PasswordRequestForm = Depends(),
+    keep_session: Optional[bool] = Form(False),
     db: Session = Depends(get_db)
 ):
     """
@@ -56,8 +77,14 @@ def login_usuario(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Error inesperado al intentar actualizar la contraseña del usuario: {str(e)}"
                 )
-    else: # Si no existe el usuario en la BBDD, se comprueba la conexión con vivaGym y se crea el usuario.
-        vivagym_auth = checkLogin(usuario)
+    else: # Si no existe el usuario en la BBDD, se lanza el error correspondiente.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se ha conseguido autenticar el usuario."
+        )
+
+        # El login de nuevos usuarios queda deshabilitado por el momento
+        """ vivagym_auth = checkLogin(usuario)
         if not vivagym_auth:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -77,22 +104,35 @@ def login_usuario(
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Error inesperado al guardar los datos del usuario en la base de datos: {str(e)}"
-            )
+            ) """
 
-    # Generar un token JWT para el usuario
-    token_data = {
-        "sub": usuario.username,  # Identificador del usuario
-    }
-    access_token = create_access_token(data=token_data)
+    # Generar tokens JWT para el usuario
+    
+    # Si "mantener sesión iniciada" está activado, el refresh token dura más
+    access_token_expires = 15 
+    refresh_token_expires = 43200 if keep_session else 1440  # 30 días o 1 día
 
-    return {
+    access_token = create_token({"sub": usuario.username}, access_token_expires)
+    refresh_token = create_token({"sub": usuario.username}, refresh_token_expires)
+
+
+    response = JSONResponse({
         "message": "Autenticación exitosa",
-        "usuario": {
-            "id_usuario": usuario.username,
-        },
+        "usuario": {"id_usuario": usuario.username},
         "access_token": access_token,
-        "token_type": "bearer",
-    }
+        "token_type": "bearer"
+    })
+
+    # Guardar refresh token en una cookie segura
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=True, # False en desarrollo, True en producción
+        samesite="Lax"
+    )
+    
+    return response
 
 @router.post("/usuario/reserva")
 def añadir_reserva_usuario(
