@@ -6,6 +6,7 @@ from app.database import get_db
 from app.gateway.vg_selenium import makeReservation
 import calendar
 from app.utils.fernet_encryption import descifrar_contraseña
+import time
 
 jobstores = {
     'default': SQLAlchemyJobStore(url='sqlite:///tasks.db')
@@ -32,22 +33,43 @@ def ejecutar_reserva(id_reserva, hora, centro, clase, fecha_reserva=None, progra
         
         fecha_reserva = fecha_reserva.replace(hour=int(hora[:2]), minute=int(hora[3:]), second=0)
     
-        
-
-
-        print(f"Ejecutando reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora}")
-        
+        #print(f"Ejecutando reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora}")
         usuarioReserva = obtener_usuario_por_reserva(db, id_reserva)
         email_usuario = usuarioReserva.id_usuario
         contraseña_usuario = descifrar_contraseña(usuarioReserva.contraseña)
-        if makeReservation(email_usuario, contraseña_usuario, fecha_reserva.date(), centro, clase, hora):
-            confirmar_reserva(db, id_reserva, fecha_reserva)
-           
+
+        insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, mensaje=f"Ejecutando reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora}")
+
+
+        # Intentar hacer la reserva hasta 3 veces
+        intentos = 0
+        while intentos < 3:
+            try:
+                if makeReservation(email_usuario, contraseña_usuario, fecha_reserva.date(), centro, clase, hora):
+                    # Si la reserva tiene éxito, confirmar la reserva en la base de datos
+                    insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, 
+                                mensaje=f"Reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora} realizada con éxito. Intento {intentos + 1}.")
+                    confirmar_reserva(db, id_reserva, fecha_reserva)
+                    break  # Salir del bucle si la reserva es exitosa
+                else:
+                    raise Exception("Error en la reserva")
             
+            except Exception as e:
+                print(f"Intento {intentos + 1} fallido: {e}")
+                insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, 
+                        mensaje=f"Error al hacer la reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora}. Intento {intentos + 1} fallido.")
+                time.sleep(5)  # Esperar 5 segundos antes de reintentar
+                intentos += 1
+    
+        if intentos == 3:
+            insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, 
+                        mensaje=f"Error al hacer la reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora}")
+            print(f"Reserva en centro {centro} cancelada tras 3 intentos fallidos.")
 
     else:
         # Reserva cancelada
-        print(f"Reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora} no ejecutada por estar inactiva.")
+        insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, mensaje=f"Reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora} no ejecutada por estar inactiva.")
+        #print(f"Reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora} no ejecutada por estar inactiva.")
 
 
 
@@ -71,13 +93,18 @@ def proxima_fecha_reserva(fecha_actual:datetime, dia_reserva:int, hora_reserva:s
 
     return proxima_fecha
 
-# Función para cancelar una tarea programada en scheduler
 def eliminar_reserva_programada(id_reserva):
-    try: 
-        scheduler.remove_job(id_reserva)
-        print(f"Reserva ID {id_reserva} cancelada exitosamente.")
-    except:
-        print(f"Parece que la reserva ID {id_reserva} no estaba programada.")
+    try:
+        # Intentar remover la tarea programada del scheduler
+        job = scheduler.get_job(id_reserva)
+        if job:
+            scheduler.remove_job(id_reserva)
+            print(f"Reserva ID {id_reserva} cancelada exitosamente.")
+        else:
+            print(f"No se encontró tarea programada con ID {id_reserva}. No es necesario cancelar ninguna tarea.")
+    except Exception as e:
+        # Si ocurre cualquier otro error, se maneja y no interrumpe el flujo
+        print(f"Error al cancelar la reserva ID {id_reserva}: {e}")
  
 
 # Función para programar la tarea
@@ -125,8 +152,9 @@ def programar_reserva(id_reserva, dia_semana, hora, centro, clase):
         day_of_week = dia_idx,
         hour = hora.split(":")[0],
         minute = hora.split(":")[1],
+        second = 5,  # Añado 5 segundos de margen para evitar problemas de sincronización
         args = [id_reserva, hora, centro, clase],
-        misfire_grace_time=300,  # Permite hasta 5 minutos de retraso
+        misfire_grace_time=300,  # Permite hasta 5 minutos de retraso en caso de que el sistema esté ocupado
         id = id_job,
     )
   

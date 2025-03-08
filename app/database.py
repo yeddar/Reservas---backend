@@ -2,6 +2,8 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Column, PrimaryKe
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.orm import Session
+from sqlalchemy import Text
+from datetime import datetime
 
 
 Base = declarative_base()
@@ -30,6 +32,18 @@ class Reserva(Base):
     # Relación con usuarios
     usuario = relationship('Usuario', backref='reservas')
 
+class Log(Base):
+    __tablename__ = "logs"
+    
+    id_log = Column(Integer, primary_key=True, autoincrement=True)
+    mensaje = Column(Text, nullable=False)  # El mensaje del log
+    fecha_creacion = Column(DateTime, default=datetime.now)  # Fecha de creación del log
+    id_usuario = Column(String, ForeignKey('usuarios.id_usuario', ondelete='SET NULL'), nullable=True)  
+    id_reserva = Column(Integer, ForeignKey('reservas.id_reserva', ondelete='SET NULL'), nullable=True)  
+
+    def __repr__(self):
+        return f"<Log(id_log={self.id_log}, mensaje={self.mensaje}, fecha_creacion={self.fecha_creacion})>"
+    
 
 DATABASE_URL = "sqlite:///./reservas.db" # Archivo de base de datos
 

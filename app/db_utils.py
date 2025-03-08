@@ -2,8 +2,15 @@ from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from app.database import Reserva, Usuario
+from app.database import Reserva, Usuario, Log
 from datetime import timedelta
+
+def insertar_log(db: Session, id_usuario, id_reserva, mensaje):
+    log = Log(id_usuario=id_usuario, id_reserva=id_reserva, mensaje=mensaje)
+    db.add(log)
+    db.commit()  
+    db.refresh(log)  # Para obtener el objeto con la id generada
+    return log
 
 
 def reserva_confirmada(reserva: Reserva) -> bool:
@@ -38,22 +45,29 @@ def elimina_reserva(db: Session, id_reserva: int) -> bool:
         HTTPException: Si no se encuentra una reserva con el ID especificado.
     """
     # Buscar la reserva en la base de datos
+    print(f"Buscando reserva con ID {id_reserva}...")
     reserva = db.get(Reserva, id_reserva)
+    
     if reserva is None:
+        print(f"No se encontró reserva con ID {id_reserva}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Reserva con ID {id_reserva} no encontrada."
         )
-    
+
+    print(f"Reserva encontrada: {reserva}")
+
     try:
         # Eliminar la reserva
         db.delete(reserva)
         db.commit()
+        print(f"Reserva con ID {id_reserva} eliminada exitosamente.")
         return True
     
     except Exception as e:
         # Manejar cualquier error que ocurra durante la eliminación
         db.rollback()
+        print(f"Error al eliminar la reserva: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al eliminar la reserva: {str(e)}"
