@@ -46,14 +46,14 @@ def refresh_token(refresh_token: str = Cookie(None)):
 def login_usuario(
     #usuario: CreateUsuario,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    keep_session: Optional[bool] = Form(False),
     db: Session = Depends(get_db)
 ):
     """
     Intenta autenticar con vivaGym.
     Crea el usuario en la base de datos si no existe.
     """
-
+    keep_session = "keep_session" in form_data.scopes
+ 
     # Crea un objeto usuario con los datos del formulario
     usuario = CreateUsuario(username=form_data.username, password=form_data.password)
 

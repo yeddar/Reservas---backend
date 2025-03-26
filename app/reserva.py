@@ -8,7 +8,7 @@ CENTROS = {
 
 
 # TODO Añadir más clases
-CLASES = ["Body Pump", "Cycling", "Body Combat", "GAP", "Virtual Cycling", "Zumba", "Yoga", "Body Balance", "Pilates"]
+CLASES = ["Body Pump", "Cycling", "Body Combat", "GAP", "Virtual Cycling", "Zumba", "Yoga", "Body Balance", "Pilates", "ABS"]
 
 
 class CreateReserva(BaseModel):

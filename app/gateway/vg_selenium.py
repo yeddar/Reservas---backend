@@ -91,7 +91,7 @@ def makeReservation(email, password, fecha_reserva, centro, clase, hora):
         driver.get(f"https://gimnasios.vivagym.es/booking?centers={booking_center}&date={booking_date}")
 
         # Esperar a que los campos de email y contraseña estén presentes
-        WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.ID, "email")))
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "email")))
 
         # Encontrar el campo de email y contraseña
         email_input = driver.find_element(By.ID, "email")
@@ -107,7 +107,7 @@ def makeReservation(email, password, fecha_reserva, centro, clase, hora):
 
         
         # Buscar todos los elementos con el ID que contiene 'participation-entry'
-        participation_entries = WebDriverWait(driver, 20).until(
+        participation_entries = WebDriverWait(driver, 10).until(
             EC.presence_of_all_elements_located((By.CSS_SELECTOR, '[id^="participation-entry"]'))
         )
         
@@ -128,7 +128,7 @@ def makeReservation(email, password, fecha_reserva, centro, clase, hora):
             raise Exception("No se encontró una clase que cumpla las condiciones.")
 
         # Realizar la reserva
-        participation_entry = WebDriverWait(driver, 20).until(
+        participation_entry = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.ID, participation_id))
         )
         
@@ -140,7 +140,7 @@ def makeReservation(email, password, fecha_reserva, centro, clase, hora):
 
         # Esperar a que aparezca el botón de reserva
         print("Solicitando reserva...")
-        booking_btn = WebDriverWait(driver, 20).until(
+        booking_btn = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[data-cy="book-button"]'))
         )
         booking_btn.click()
@@ -148,7 +148,7 @@ def makeReservation(email, password, fecha_reserva, centro, clase, hora):
         print("Se ha solicitado la reserva. Esperando modal de confirmación")
 
         # Esperar a que el modal de confirmación aparezca
-        confirmar_modal = WebDriverWait(driver, 20).until(
+        confirmar_modal = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, 'button[data-cy="book-class-confirm-button"]'))
         )
 

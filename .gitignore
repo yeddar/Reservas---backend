@@ -1,5 +1,7 @@
 reservas.db
 tasks.db
+gateway/.env
+utils/.env
 app/__pycache__/
 app/gateway/__pycache__/
 app/repository/__pycache__/

@@ -14,6 +14,11 @@ jobstores = {
 
 scheduler = BackgroundScheduler(jobstores=jobstores)
 
+# Programar tarea de keep-alive para evitar que la aplicación se duerma
+@scheduler.scheduled_job('interval', minutes=10, id="keep_alive")
+def keep_alive():
+    print(f"[{datetime.now()}] Keep-alive ejecutado")
+
 
 def ejecutar_reserva(id_reserva, hora, centro, clase, fecha_reserva=None, programada=True):
     # Obtener la sesión de la base de datos
@@ -41,30 +46,30 @@ def ejecutar_reserva(id_reserva, hora, centro, clase, fecha_reserva=None, progra
         insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, mensaje=f"Ejecutando reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora}")
 
 
-        # Intentar hacer la reserva hasta 3 veces
-        intentos = 0
-        while intentos < 3:
+        # Intentar hacer la reserva 2 veces
+        intento = 1
+        while intento <= 2:
             try:
                 if makeReservation(email_usuario, contraseña_usuario, fecha_reserva.date(), centro, clase, hora):
                     # Si la reserva tiene éxito, confirmar la reserva en la base de datos
                     insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, 
-                                mensaje=f"Reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora} realizada con éxito. Intento {intentos + 1}.")
+                                mensaje=f"Reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora} realizada con éxito. Intento {intento}.")
                     confirmar_reserva(db, id_reserva, fecha_reserva)
                     break  # Salir del bucle si la reserva es exitosa
                 else:
                     raise Exception("Error en la reserva")
             
             except Exception as e:
-                print(f"Intento {intentos + 1} fallido: {e}")
+                print(f"Intento {intento} fallido: {e}")
                 insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, 
-                        mensaje=f"Error al hacer la reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora}. Intento {intentos + 1} fallido.")
+                        mensaje=f"Error al hacer la reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora}. Intento {intento} fallido.")
                 time.sleep(5)  # Esperar 5 segundos antes de reintentar
-                intentos += 1
+                intento += 1
     
-        if intentos == 3:
+        if intento > 2:
             insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, 
                         mensaje=f"Error al hacer la reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora}")
-            print(f"Reserva en centro {centro} cancelada tras 3 intentos fallidos.")
+            print(f"Reserva en centro {centro} cancelada tras {intento} intentos fallidos.")
 
     else:
         # Reserva cancelada
@@ -152,9 +157,9 @@ def programar_reserva(id_reserva, dia_semana, hora, centro, clase):
         day_of_week = dia_idx,
         hour = hora.split(":")[0],
         minute = hora.split(":")[1],
-        second = 5,  # Añado 5 segundos de margen para evitar problemas de sincronización
+        second = 1,  # Añado 1 segundo de margen para evitar problemas de sincronización
         args = [id_reserva, hora, centro, clase],
-        misfire_grace_time=300,  # Permite hasta 5 minutos de retraso en caso de que el sistema esté ocupado
+        misfire_grace_time=60,  # Permite 1 minuto de retraso en caso de que el sistema esté ocupado
         id = id_job,
     )
   
