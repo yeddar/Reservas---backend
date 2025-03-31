@@ -15,7 +15,7 @@ jobstores = {
 scheduler = BackgroundScheduler(jobstores=jobstores)
 
 # Programar tarea de keep-alive para evitar que la aplicación se duerma
-@scheduler.scheduled_job('interval', minutes=10, id="keep_alive")
+@scheduler.scheduled_job('cron', hour=5, minute=0, id="keep_alive")
 def keep_alive():
     print(f"[{datetime.now()}] Keep-alive ejecutado")
 
@@ -26,6 +26,10 @@ def ejecutar_reserva(id_reserva, hora, centro, clase, fecha_reserva=None, progra
     
     if fecha_reserva is None:
         fecha_reserva = datetime.now()
+
+    # Obtener el email del usuario que realizó la reserva
+    usuarioReserva = obtener_usuario_por_reserva(db, id_reserva)
+    email_usuario = usuarioReserva.id_usuario
     
     if reserva_activa(db, id_reserva):
     
@@ -39,8 +43,7 @@ def ejecutar_reserva(id_reserva, hora, centro, clase, fecha_reserva=None, progra
         fecha_reserva = fecha_reserva.replace(hour=int(hora[:2]), minute=int(hora[3:]), second=0)
     
         #print(f"Ejecutando reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora}")
-        usuarioReserva = obtener_usuario_por_reserva(db, id_reserva)
-        email_usuario = usuarioReserva.id_usuario
+        
         contraseña_usuario = descifrar_contraseña(usuarioReserva.contraseña)
 
         insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, mensaje=f"Ejecutando reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora}")
