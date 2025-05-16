@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
+from concurrent.futures import ProcessPoolExecutor
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from app.db_utils import *
 from app.database import get_db
@@ -7,6 +8,8 @@ from app.gateway.vg_selenium import makeReservation
 import calendar
 from app.utils.fernet_encryption import descifrar_contraseña
 import time
+from app.gateway.vg_api import VG_API
+from app.gateway.correo import send_email
 
 jobstores = {
     'default': SQLAlchemyJobStore(url='sqlite:///tasks.db')
@@ -24,59 +27,67 @@ def ejecutar_reserva(id_reserva, hora, centro, clase, fecha_reserva=None, progra
     # Obtener la sesión de la base de datos
     db = next(get_db())
     
+
+    # Obtengo la fecha en la que se realiza la reserva
     if fecha_reserva is None:
+        # Si no se proporciona una fecha de reserva, se utiliza la fecha actual
         fecha_reserva = datetime.now()
 
     # Obtener el email del usuario que realizó la reserva
     usuarioReserva = obtener_usuario_por_reserva(db, id_reserva)
     email_usuario = usuarioReserva.id_usuario
+
+    if programada: # La reserva es programada (por defecto con un día de antelación), se añade es día a la fecha de reserva
+        print("La reserva es programada")
+        fecha_clase = fecha_reserva + timedelta(days=1) # Día siguiente al día de la reserva
+    else: # La reserva es inmediata
+        print("La reserva es inmediata")
+        fecha_clase = fecha_reserva
     
+    # Si la reserva automática está activa, se procede a realizar la reserva
     if reserva_activa(db, id_reserva):
+
+        insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, mensaje=f"Ejecutando reserva en centro {centro}: para el día {fecha_clase.date()}, {clase} a las {hora}")
+
+        # Ajusto la hora de la reserva
+        fecha_clase = fecha_clase.replace(hour=int(hora[:2]), minute=int(hora[3:]), second=0)
     
-        # Puede que se quiera reservar con menos de 24 horas de antelación
-        
-        
-        # Uso programada para colocar la fecha correcta de la reserva en la base de datos
-        if programada:
-            fecha_reserva += timedelta(days=1) # Día siguiente al día de la reserva
-        
-        fecha_reserva = fecha_reserva.replace(hour=int(hora[:2]), minute=int(hora[3:]), second=0)
-    
-        #print(f"Ejecutando reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora}")
-        
+        # Obtengo la contraseña del usuario y las descifro
         contraseña_usuario = descifrar_contraseña(usuarioReserva.contraseña)
+        vg_api = VG_API(email_usuario, contraseña_usuario)
 
-        insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, mensaje=f"Ejecutando reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora}")
+        # Doy el formato requerido a la hora de la reserva. 
+        horas, minutos = hora.split(":")
+        booking_hour = f"{horas}:{minutos}"
 
+        # Autentico al usuario con el gimnasio
+        if not vg_api.authenticate():
+            insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, mensaje=f"Error al autenticar al usuario {email_usuario}.")
+            return
 
-        # Intentar hacer la reserva 2 veces
-        intento = 1
-        while intento <= 2:
-            try:
-                if makeReservation(email_usuario, contraseña_usuario, fecha_reserva.date(), centro, clase, hora):
-                    # Si la reserva tiene éxito, confirmar la reserva en la base de datos
-                    insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, 
-                                mensaje=f"Reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora} realizada con éxito. Intento {intento}.")
-                    confirmar_reserva(db, id_reserva, fecha_reserva)
-                    break  # Salir del bucle si la reserva es exitosa
-                else:
-                    raise Exception("Error en la reserva")
-            
-            except Exception as e:
-                print(f"Intento {intento} fallido: {e}")
-                insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, 
-                        mensaje=f"Error al hacer la reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora}. Intento {intento} fallido.")
-                time.sleep(5)  # Esperar 5 segundos antes de reintentar
-                intento += 1
-    
-        if intento > 2:
-            insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, 
-                        mensaje=f"Error al hacer la reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora}")
-            print(f"Reserva en centro {centro} cancelada tras {intento} intentos fallidos.")
+        # Intento realizar la reserva
+        # participation_id es el id de la reserva en el sistema del gimnasio, útil para futuras cancelaciones.
+        participation_id = vg_api.create_booking(centro, str(fecha_clase.date()), booking_hour, clase)
 
+        print(f"participation_id: {participation_id}")
+
+        if participation_id is None:
+            insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, mensaje=f"Error al crear la reserva en centro {centro}: para el día {fecha_clase.date()}, {clase} a las {booking_hour}.")
+            return
+        
+        insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, mensaje=f"Reserva en centro {centro}: para el día {fecha_clase.date()}, {clase} a las {booking_hour} realizada con éxito.")
+
+        # La reserva se ha creado correctamente, actualizo la base de datos con la fecha de reserva
+        id_reserva_gimnasio = int(participation_id)
+        confirmar_reserva(db, id_reserva, fecha_clase, id_reserva_gimnasio)
+
+        # La reserva se crea correctamente, envío un correo de confirmación al usuario.
+        send_email(email_usuario, centro, fecha_clase.date(), clase, booking_hour)
+
+        
     else:
         # Reserva cancelada
-        insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, mensaje=f"Reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora} no ejecutada por estar inactiva.")
+        insertar_log(db, id_usuario=email_usuario, id_reserva=id_reserva, mensaje=f"Reserva en centro {centro}: prevista para el día {fecha_clase.date()}, para la clase {clase} a las {hora} no ejecutada por estar inactiva.")
         #print(f"Reserva en centro {centro}: para el día {fecha_reserva.date()}, {clase} a las {hora} no ejecutada por estar inactiva.")
 
 
@@ -160,7 +171,7 @@ def programar_reserva(id_reserva, dia_semana, hora, centro, clase):
         day_of_week = dia_idx,
         hour = hora.split(":")[0],
         minute = hora.split(":")[1],
-        second = 1,  # Añado 1 segundo de margen para evitar problemas de sincronización
+        #second = 1,  # Añado 1 segundo de margen para evitar problemas de sincronización
         args = [id_reserva, hora, centro, clase],
         misfire_grace_time=60,  # Permite 1 minuto de retraso en caso de que el sistema esté ocupado
         id = id_job,

@@ -5,6 +5,7 @@ attrs==24.3.0
 bcrypt==4.2.1
 certifi==2024.12.14
 cffi==1.17.1
+charset-normalizer==3.4.1
 chromedriver==2.24.1
 click==8.1.7
 cryptography==44.0.0
@@ -25,6 +26,7 @@ PySocks==1.7.1
 python-dotenv==1.0.1
 python-jose==3.3.0
 python-multipart==0.0.20
+requests==2.32.3
 rsa==4.9
 selenium==4.27.1
 six==1.17.0

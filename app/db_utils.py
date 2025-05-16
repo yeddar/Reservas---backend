@@ -127,7 +127,7 @@ def cambia_estado_reserva(db: Session, id_reserva: int):
   
     return True
 
-def confirmar_reserva(db: Session, id_reserva: int, fecha_reserva: datetime) -> bool:
+def confirmar_reserva(db: Session, id_reserva: int, fecha_reserva: datetime, id_reserva_gimnasio: int) -> bool:
     """
     Establece la fecha y hora de la clase. Esto sirve para saber si 
     la reserva se ha efectuado correctamente o no.
@@ -141,6 +141,9 @@ def confirmar_reserva(db: Session, id_reserva: int, fecha_reserva: datetime) -> 
 
     # La fecha de reserva es la fecha y hora en la que tendrá lugar la clase. Esto es así para luego poder calcular de forma más sencilla.
     reserva.fecha_reserva = fecha_reserva
+
+    # Guardo el id de la reserva del gimnasio (si existe)
+    reserva.id_reserva_gimnasio = id_reserva_gimnasio
 
     try:
         # Guardar los cambios en la base de datos

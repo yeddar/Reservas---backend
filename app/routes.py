@@ -13,6 +13,7 @@ from typing import Optional
 from fastapi.responses import JSONResponse
 from fastapi import Cookie
 from fastapi import Form
+from app.gateway.vg_api import VG_API
 
 from fastapi.security import OAuth2PasswordRequestForm
 
@@ -64,19 +65,27 @@ def login_usuario(
         contraseña_descifrada = descifrar_contraseña(usuario_bd.contraseña)
         # Comprueba que la contraseña no haya cambiado. Si ha cambiado, actualizo la base de datos.
         if usuario.password != contraseña_descifrada:
-            vivagym_auth = checkLogin(usuario) # Comprueba la conexión con vivaGym antes de actualizar la contraseña
+            vg_api = VG_API(usuario.username, usuario.password)
+            # Comprueba la conexión con vivaGym antes de actualizar la contraseña
+            vivagym_auth = vg_api.authenticate()
             if not vivagym_auth:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="No se ha conseguido autenticar el usuario."
                 )
+            # Si la contraseña ha cambiado, la actualizo en la base de datos
+            # Se guarda la contraseña cifrada en la base de datos
+            contraseña_cifrada = cifrar_contraseña(usuario.password)
             try:
-                actualizar_contraseña_usuario(db, usuario_bd, usuario.password)
+                actualizar_contraseña_usuario(db, usuario_bd, contraseña_cifrada)
             except Exception as e:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Error inesperado al intentar actualizar la contraseña del usuario: {str(e)}"
                 )
+            
+        # Si la contraseña no ha cambiado, no se hace nada
+            
     else: # Si no existe el usuario en la BBDD, se lanza el error correspondiente.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
